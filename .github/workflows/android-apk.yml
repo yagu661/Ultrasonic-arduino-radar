@@ -1,12 +1,14 @@
-name: Build Ultrasonic Radar APK
+name: Build Ultrasonic Radar APK (Manual)
 
 on:
-  push:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: build-ultrasonic-radar-apk
+  cancel-in-progress: true
 
 jobs:
   build-apk:
@@ -26,6 +28,13 @@ jobs:
 
       - name: Configure Public Android SDK & Gradle Dependencies for CI
         run: |
+          cat > gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          kotlin.code.style=official
+          EOF
+
           cat > gradle/libs.versions.toml << 'EOF'
           [versions]
           agp = "8.7.3"
@@ -152,12 +161,12 @@ jobs:
 
       - name: Build Installable APK
         run: |
-          gradle assembleDebug -x checkDebugAarMetadata --no-daemon
+          gradle assembleDebug -Pandroid.useAndroidX=true -Pandroid.enableJetifier=false -x checkDebugAarMetadata --no-daemon --no-configuration-cache
           cp app/build/outputs/apk/debug/app-debug.apk UltrasonicRadar.apk
 
       - name: Commit UltrasonicRadar.apk directly to Repository Root
         run: |
-          git checkout -- gradle/libs.versions.toml build.gradle.kts app/build.gradle.kts
+          git checkout -- gradle.properties gradle/libs.versions.toml build.gradle.kts app/build.gradle.kts
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f UltrasonicRadar.apk
