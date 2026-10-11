@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">Ultrasonic Radar</string>
+    <string name="header_subtitle">ARDUINO UNO R3 • HC-SR04 • 115200 BAUD USB OTG</string>
+    <string name="status_disconnected">USB DISCONNECTED</string>
+    <string name="status_permission_pending">AWAITING USB PERMISSION</string>
+    <string name="status_connected">USB OTG CONNECTED (115200 BAUD)</string>
+    <string name="status_error">USB CONNECTION ERROR</string>
+    <string name="btn_connect">Connect USB</string>
+    <string name="btn_disconnect">Disconnect</string>
+    <string name="btn_scan_usb">Scan USB Devices</string>
+    <string name="label_angle">RADAR ANGLE</string>
+    <string name="label_distance">MEASURED DISTANCE</string>
+    <string name="label_status">LINK STATUS</string>
+    <string name="label_max_range">MAX RADAR RANGE</string>
+    <string name="label_manual_angle_control">ADJUSTABLE RADAR ANGLE (0° – 180°)</string>
+    <string name="label_serial_log">LIVE SERIAL PACKET STREAM (angle,distance.)</string>
+    <string name="label_arduino_guide">Arduino Sketch &amp; APK Install Guide</string>
+    <string name="unit_cm">cm</string>
+    <string name="unit_deg">°</string>
+    <string name="out_of_range">OUT OF RANGE</string>
+    <string name="target_detected">TARGET DETECTED</string>
+    <string name="no_target">CLEAR SECTOR</string>
+    <string name="clear_radar">Clear</string>
+</resources>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Arduino Uno R3, Mega, Leonardo, etc. (Official Arduino LLC / Arduino.org) -->
+    <usb-device vendor-id="9025" />
+    <usb-device vendor-id="10755" />
+    <!-- WCH CH340 / CH341 (Common Arduino Uno R3 clones) -->
+    <usb-device vendor-id="6790" product-id="29987" />
+    <usb-device vendor-id="6790" product-id="21795" />
+    <usb-device vendor-id="6790" />
+    <!-- FTDI FT232R / FT231X -->
+    <usb-device vendor-id="1027" />
+    <!-- Silicon Labs CP210x -->
+    <usb-device vendor-id="4292" />
+    <!-- Prolific PL2303 -->
+    <usb-device vendor-id="1659" />
+    <!-- Atmel ATmega16U2 / ATmega8U2 DFU / CDC -->
+    <usb-device vendor-id="1003" />
+    <!-- Standard USB CDC-ACM Communications class (Class 2) -->
+    <usb-device class="2" />
+</resources>

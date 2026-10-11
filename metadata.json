@@ -1,0 +1,6 @@
+{
+  "name": "Ultrasonic Radar",
+  "description": "Native Android USB OTG Ultrasonic Radar for Arduino Uno R3 and HC-SR04 sensor at 115200 baud with real-time semicircular radar sweep and target detection.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
