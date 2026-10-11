@@ -10,42 +10,166 @@ permissions:
 
 jobs:
   build-apk:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up JDK 21
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
+          java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
+      - name: Configure Public Android SDK & Gradle Dependencies for CI
+        run: |
+          cat > gradle/libs.versions.toml << 'EOF'
+          [versions]
+          agp = "8.7.3"
+          kotlin = "2.0.21"
+          coreKtx = "1.15.0"
+          junit = "4.13.2"
+          junitVersion = "1.2.1"
+          espressoCore = "3.6.1"
+          lifecycleRuntimeKtx = "2.8.7"
+          lifecycleViewmodelCompose = "2.8.7"
+          lifecycleRuntimeCompose = "2.8.7"
+          activityCompose = "1.9.3"
+          composeBom = "2024.09.00"
+          kotlinxCoroutinesAndroid = "1.9.0"
+          kotlinxCoroutinesCore = "1.9.0"
+          kotlinxCoroutinesTest = "1.9.0"
+          core = "1.6.1"
+          runner = "1.6.2"
+          robolectric = "4.14.1"
+          usbSerialForAndroid = "3.8.1"
+
+          [libraries]
+          usb-serial-android = { group = "com.github.mik3y", name = "usb-serial-for-android", version.ref = "usbSerialForAndroid" }
+          androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+          junit = { group = "junit", name = "junit", version.ref = "junit" }
+          androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+          androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+          androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+          androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleViewmodelCompose" }
+          androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeCompose" }
+          androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+          androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+          androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+          androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+          androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+          androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+          androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+          androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+          androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+          androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
+          androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+          kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
+          kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutinesCore" }
+          kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
+          androidx-core = { group = "androidx.test", name = "core", version.ref = "core" }
+          androidx-runner = { group = "androidx.test", name = "runner", version.ref = "runner" }
+          robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+
+          [plugins]
+          android-application = { id = "com.android.application", version.ref = "agp" }
+          kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+          kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+          EOF
+
+          cat > build.gradle.kts << 'EOF'
+          plugins {
+            alias(libs.plugins.android.application) apply false
+            alias(libs.plugins.kotlin.android) apply false
+            alias(libs.plugins.kotlin.compose) apply false
+          }
+          EOF
+
+          cat > app/build.gradle.kts << 'EOF'
+          plugins {
+            alias(libs.plugins.android.application)
+            alias(libs.plugins.kotlin.android)
+            alias(libs.plugins.kotlin.compose)
+          }
+
+          android {
+            namespace = "com.example"
+            compileSdk = 35
+
+            defaultConfig {
+              applicationId = "com.aistudio.ultrasonicradar.m30s"
+              minSdk = 24
+              targetSdk = 35
+              versionCode = 1
+              versionName = "1.0"
+            }
+
+            compileOptions {
+              sourceCompatibility = JavaVersion.VERSION_11
+              targetCompatibility = JavaVersion.VERSION_11
+            }
+            kotlinOptions {
+              jvmTarget = "11"
+            }
+            buildFeatures {
+              compose = true
+              buildConfig = true
+            }
+          }
+
+          dependencies {
+            implementation(platform(libs.androidx.compose.bom))
+            implementation(libs.androidx.activity.compose)
+            implementation(libs.androidx.compose.material.icons.core)
+            implementation(libs.androidx.compose.material.icons.extended)
+            implementation(libs.androidx.compose.material3)
+            implementation(libs.androidx.compose.ui)
+            implementation(libs.androidx.compose.ui.graphics)
+            implementation(libs.androidx.compose.ui.tooling.preview)
+            implementation(libs.androidx.core.ktx)
+            implementation(libs.androidx.lifecycle.runtime.compose)
+            implementation(libs.androidx.lifecycle.runtime.ktx)
+            implementation(libs.androidx.lifecycle.viewmodel.compose)
+            implementation(libs.kotlinx.coroutines.android)
+            implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.usb.serial.android)
+          }
+          EOF
+
+      - name: Setup Gradle 8.10.2
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '9.3.1'
+          gradle-version: '8.10.2'
 
-      - name: Generate Debug Keystore
+      - name: Build Installable APK
         run: |
-          if [ ! -f debug.keystore ]; then
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          fi
+          gradle assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk UltrasonicRadar.apk
 
-      - name: Build Debug APK
-        run: gradle assembleDebug
+      - name: Commit UltrasonicRadar.apk directly to Repository Root
+        run: |
+          git checkout -- gradle/libs.versions.toml build.gradle.kts app/build.gradle.kts
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f UltrasonicRadar.apk
+          git commit -m "Add compiled UltrasonicRadar.apk to repository root [skip ci]" || true
+          git push || true
 
       - name: Upload Installable APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: UltrasonicRadar-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: UltrasonicRadar.apk
 
-      - name: Create Direct APK Release on GitHub
+      - name: Publish Direct APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0-latest
-          name: "Ultrasonic Radar APK (Direct Download)"
-          files: app/build/outputs/apk/debug/app-debug.apk
+          tag_name: v1.0.0
+          name: "Ultrasonic Radar v1.0 APK (Direct Download)"
+          body: "Tap **UltrasonicRadar.apk** below under Assets to download and install directly on your Samsung Galaxy M30s."
+          files: UltrasonicRadar.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
