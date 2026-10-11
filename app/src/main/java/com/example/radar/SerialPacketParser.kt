@@ -27,7 +27,8 @@ object SerialPacketParser {
 
     /**
      * Parses a single line or packet formatted as "angle,distance." or "angle,distance".
-     * Never throws an exception on malformed or corrupted serial data.
+     * Safely handles no-echo readings (0, -1, or >500cm timeout values) and malformed strings
+     * without throwing exceptions.
      */
     fun parsePacket(rawInput: String): SerialParseResult {
         val trimmed = rawInput.trim()
@@ -75,18 +76,24 @@ object SerialPacketParser {
             )
         }
 
-        if (distanceFloat < 0f || distanceFloat > MAX_SENSOR_DISTANCE_CM) {
-            // Note: HC-SR04 sometimes outputs 0 when out of range or timeout.
-            // Negative or >500cm is treated as invalid/out-of-bounds.
+        // Negative values other than -1 (which some sketches use for no-echo) or extreme negatives are invalid
+        if (distanceFloat < -1f) {
             return SerialParseResult.InvalidPacket(
                 rawLine = trimmed,
-                reason = "Distance $distanceFloat cm out of bounds"
+                reason = "Negative distance $distanceFloat cm"
             )
+        }
+
+        // Normalize no-echo readings (-1, 0, or >500cm sensor timeout) to 0f (no object detected)
+        val normalizedDistanceCm = if (distanceFloat <= 0f || distanceFloat > MAX_SENSOR_DISTANCE_CM) {
+            0f
+        } else {
+            distanceFloat
         }
 
         return SerialParseResult.ValidPacket(
             angle = angleInt,
-            distanceCm = distanceFloat,
+            distanceCm = normalizedDistanceCm,
             rawLine = if (trimmed.endsWith(".")) trimmed else "$trimmed."
         )
     }
@@ -157,15 +164,12 @@ class SerialStreamBuffer(
     }
 
     private fun parseLineWithPossibleMultiPackets(line: String): List<SerialParseResult> {
-        // Usually a line is "90,24." -> 1 packet.
-        // What if a line has "90,24.91,25." on the same line?
         val trimmed = line.trim()
         val commaCount = trimmed.count { it == ',' }
         if (commaCount <= 1) {
             return listOf(SerialPacketParser.parsePacket(trimmed))
         }
 
-        // Multiple packets concatenated on a single line separated by '.'
         val results = mutableListOf<SerialParseResult>()
         val rawTokens = trimmed.split('.').map { it.trim() }.filter { it.isNotEmpty() }
         for (token in rawTokens) {
@@ -174,20 +178,13 @@ class SerialStreamBuffer(
         return results
     }
 
-    /**
-     * Detects a terminating '.' in "angle,distance." when not part of a decimal point
-     * (i.e., when '.' is at the end after a comma and followed by another packet or end of line).
-     */
     private fun findTerminatingDotIndex(sb: CharSequence): Int {
         val commaIdx = sb.indexOf(',')
         if (commaIdx < 0) return -1
         for (i in (commaIdx + 1) until sb.length) {
             if (sb[i] == '.') {
-                // If it's the last character, wait briefly only if it might be a decimal point,
-                // unless there is already a decimal point before it or next char is a newline/comma-starter
                 val substrAfterComma = sb.subSequence(commaIdx + 1, i)
                 if (substrAfterComma.contains('.')) {
-                    // Already had a decimal point, so this second '.' is definitely the packet terminator
                     return i
                 }
             }

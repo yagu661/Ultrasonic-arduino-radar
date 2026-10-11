@@ -55,25 +55,17 @@ import com.example.ui.theme.RadarSurfaceElevated
 import com.example.ui.theme.TextPhosphorMuted
 import com.example.ui.theme.TextPhosphorWhite
 
-private const val ARDUINO_UNO_SKETCH = """// Arduino Uno R3 + HC-SR04 Ultrasonic Radar (115200 Baud USB OTG)
-// Output Format: angle,distance.\n  (Example: 90,24.)
-#include <Servo.h>
+private const val ARDUINO_UNO_SKETCH = """// Arduino Uno R3 + HC-SR04 Ultrasonic Radar (Manual Hand-Scan, No Servo Required)
+// Baud Rate: 115200 | Output Format: angle,distance.\n  (Example: 90,24.)
 
 const int TRIG_PIN = 9;
 const int ECHO_PIN = 10;
-const int SERVO_PIN = 8;
-
-Servo radarServo;
-int currentAngle = 90;
-int stepDir = 2;
-bool manualLock = false;
+int reportedAngle = 90; // Synchronized with manual angle control in Android app
 
 void setup() {
   Serial.begin(115200);
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
-  radarServo.attach(SERVO_PIN);
-  radarServo.write(currentAngle);
 }
 
 int measureDistanceCm() {
@@ -83,37 +75,29 @@ int measureDistanceCm() {
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
   long duration = pulseIn(ECHO_PIN, HIGH, 30000); // 30ms timeout (~500cm)
-  if (duration <= 0) return 0;
+  if (duration <= 0) return 0; // 0 = no echo / clear sector
   return (int)(duration * 0.0343 / 2.0);
 }
 
 void loop() {
-  // Optional: Accept target angle (0..180) sent from Android app slider
+  // Optional: Keep reportedAngle in sync when adjusted in Android app
   if (Serial.available() > 0) {
-    int requestedAngle = Serial.parseInt();
+    int incomingAngle = Serial.parseInt();
     while (Serial.available() > 0) Serial.read();
-    if (requestedAngle >= 0 && requestedAngle <= 180) {
-      currentAngle = requestedAngle;
-      radarServo.write(currentAngle);
-      manualLock = true;
+    if (incomingAngle >= 0 && incomingAngle <= 180) {
+      reportedAngle = incomingAngle;
     }
   }
 
   int distanceCm = measureDistanceCm();
 
-  // Exact required format: angle,distance. followed by newline
-  Serial.print(currentAngle);
+  // Exact format: angle,distance. followed by newline
+  Serial.print(reportedAngle);
   Serial.print(",");
   Serial.print(distanceCm);
   Serial.println(".");
 
-  if (!manualLock) {
-    currentAngle += stepDir;
-    if (currentAngle >= 180) { currentAngle = 180; stepDir = -2; }
-    if (currentAngle <= 0)   { currentAngle = 0;   stepDir = 2;  }
-    radarServo.write(currentAngle);
-  }
-  delay(35);
+  delay(80);
 }"""
 
 @Composable
@@ -154,7 +138,7 @@ fun ArduinoGuideDialog(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Galaxy M30s APK & Arduino Setup",
+                            text = "Hand-Scan Setup & Arduino Sketch",
                             style = MaterialTheme.typography.titleLarge,
                             color = TextPhosphorWhite
                         )
@@ -171,7 +155,6 @@ fun ArduinoGuideDialog(
                     }
                 }
 
-                // Hardware schematic illustration
                 Image(
                     painter = painterResource(id = R.drawable.img_arduino_wiring_guide_1791710270395),
                     contentDescription = "Arduino Uno R3 USB OTG and HC-SR04 Wiring Schematic",
@@ -183,7 +166,6 @@ fun ArduinoGuideDialog(
                     contentScale = ContentScale.Crop
                 )
 
-                // APK Installation instructions for Samsung Galaxy M30s (Android 11)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -202,29 +184,28 @@ fun ArduinoGuideDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "HOW TO INSTALL APK ON SAMSUNG GALAXY M30s (ANDROID 11)",
+                            text = "MANUAL HAND-SCAN WORKFLOW",
                             style = MaterialTheme.typography.labelLarge,
                             color = RadarCyanInfo
                         )
                     }
                     Text(
-                        text = "1. In AI Studio, open the top-right Settings / Export menu and click \"Download APK\" (or Export ZIP to build with Android Studio).",
+                        text = "1. Point your HC-SR04 sensor at an angle (e.g., 90°) and set the same angle in the app's Manual Angle Control.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = TextPhosphorWhite
                     )
                     Text(
-                        text = "2. Transfer the downloaded APK to your Samsung Galaxy M30s and tap it in Samsung \"My Files\". If prompted, enable \"Allow from this source\" under Settings → Biometrics and security → Install unknown apps.",
+                        text = "2. Objects detected within range draw a RED 15° FILLED WEDGE with the distance in cm next to the area.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = TextPhosphorWhite
                     )
                     Text(
-                        text = "3. Plug your USB-C OTG adapter into your Galaxy M30s and connect the Arduino Uno R3 USB-B cable. Android 11 will automatically prompt \"Open Ultrasonic Radar to handle USB Serial?\" — tap OK.",
+                        text = "3. Rotate the sensor by hand to new angles to build a full map. Previous detections stay on screen until you rescan that angle and confirm the object is gone (turning that sector GREEN).",
                         style = MaterialTheme.typography.bodyLarge,
                         color = TextPhosphorWhite
                     )
                 }
 
-                // Pinout reference
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -243,7 +224,7 @@ fun ArduinoGuideDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "HC-SR04 + ARDUINO UNO R3 WIRING & SERIAL PROTOCOL",
+                            text = "HC-SR04 + ARDUINO UNO R3 WIRING (NO SERVO NEEDED)",
                             style = MaterialTheme.typography.labelLarge,
                             color = RadarGreenBright
                         )
@@ -251,14 +232,12 @@ fun ArduinoGuideDialog(
                     Text(
                         text = "• HC-SR04 VCC → Arduino 5V   |   HC-SR04 GND → Arduino GND\n" +
                             "• HC-SR04 TRIG → Digital Pin 9   |   HC-SR04 ECHO → Digital Pin 10\n" +
-                            "• Optional SG90 Servo Signal → Digital Pin 8\n" +
                             "• Serial Config: 115200 baud, 8N1, format: angle,distance.\\n (e.g. 90,24.)",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextPhosphorWhite
                     )
                 }
 
-                // Arduino Sketch Code Block
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

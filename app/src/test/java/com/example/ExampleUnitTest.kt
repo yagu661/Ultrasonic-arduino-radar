@@ -30,6 +30,18 @@ class ExampleUnitTest {
     }
 
     @Test
+    fun parseNoEchoReadings_normalizesToZeroDistance() {
+        val zeroEcho = SerialPacketParser.parsePacket("90,0.") as SerialParseResult.ValidPacket
+        assertEquals(0f, zeroEcho.distanceCm, 0.01f)
+
+        val minusOneEcho = SerialPacketParser.parsePacket("90,-1.") as SerialParseResult.ValidPacket
+        assertEquals(0f, minusOneEcho.distanceCm, 0.01f)
+
+        val timeoutEcho = SerialPacketParser.parsePacket("90,999.") as SerialParseResult.ValidPacket
+        assertEquals(0f, timeoutEcho.distanceCm, 0.01f)
+    }
+
+    @Test
     fun parseInvalidSerialData_doesNotCrash() {
         val outOfBoundsAngle = SerialPacketParser.parsePacket("245,30.")
         assertTrue(outOfBoundsAngle is SerialParseResult.InvalidPacket)

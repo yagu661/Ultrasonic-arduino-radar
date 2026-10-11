@@ -24,16 +24,19 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.UsbOff
 import androidx.compose.material.icons.filled.WarningAmber
@@ -42,7 +45,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -54,6 +56,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -66,6 +69,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
@@ -133,7 +138,6 @@ fun RadarDashboardScreen(
                         .widthIn(max = 960.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // 1. Top Tactical Header & USB Connection Controls
                     TopRadarConnectionHeader(
                         connectionState = uiState.connectionState,
                         availableDevices = uiState.availableDevices,
@@ -180,7 +184,6 @@ fun RadarDashboardScreen(
                             }
                         }
                     } else {
-                        // Portrait handheld layout optimized for Samsung Galaxy M30s
                         RadarScopeSection(
                             uiState = uiState,
                             onAngleChanged = onAngleChanged,
@@ -284,7 +287,7 @@ private fun TopRadarConnectionHeader(
                             color = TextPhosphorWhite
                         )
                         Text(
-                            text = stringResource(R.string.header_subtitle),
+                            text = "15° BEAM AREA MAPPER • 115200 BAUD USB OTG",
                             style = MaterialTheme.typography.labelSmall,
                             color = RadarGreenPrimary
                         )
@@ -314,7 +317,6 @@ private fun TopRadarConnectionHeader(
                 }
             }
 
-            // Connection Status Banner
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -347,7 +349,6 @@ private fun TopRadarConnectionHeader(
                 }
             }
 
-            // Connect / Disconnect / Scan Action Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -428,7 +429,6 @@ private fun TopRadarConnectionHeader(
                 }
             }
 
-            // If one or more USB OTG devices are plugged in, display them for one-tap selection
             if (availableDevices.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     for (dev in availableDevices) {
@@ -488,7 +488,7 @@ private fun RadarScopeSection(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Top bar above radar scope: Target Detection Pill + Clear Button
+            // Top bar above radar scope: Target Detection Pill + Prominent Clear Scan Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -503,21 +503,23 @@ private fun RadarScopeSection(
                 val badgeLabel = when {
                     isDetected -> {
                         val cmStr = formatDistanceValue(uiState.measuredDistanceCm)
-                        "TARGET DETECTED AT $cmStr cm (${uiState.currentAngle}°)"
+                        "RED WEDGE: $cmStr cm @ ${uiState.currentAngle}°"
                     }
                     uiState.measuredDistanceCm != null &&
                         (uiState.measuredDistanceCm <= 0f || uiState.measuredDistanceCm > uiState.maxRangeCm) -> {
-                        stringResource(R.string.out_of_range)
+                        "SECTOR CLEAR (${uiState.currentAngle}° GREEN)"
                     }
-                    else -> stringResource(R.string.no_target)
+                    else -> "READY TO SCAN (${uiState.currentAngle}°)"
                 }
 
                 Row(
                     modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(badgeColor.copy(alpha = 0.14f))
                         .border(1.dp, badgeColor.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
                         .testTag("target_detection_badge"),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -531,23 +533,38 @@ private fun RadarScopeSection(
                     Text(
                         text = badgeLabel,
                         style = MaterialTheme.typography.labelLarge,
-                        color = badgeColor
+                        color = badgeColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                IconButton(
+                OutlinedButton(
                     onClick = onClearRadar,
-                    modifier = Modifier.testTag("clear_radar_button")
+                    border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
+                        brush = SolidColor(RadarRedDetection.copy(alpha = 0.7f))
+                    ),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .height(40.dp)
+                        .testTag("clear_radar_button")
                 ) {
                     Icon(
                         imageVector = Icons.Default.DeleteSweep,
-                        contentDescription = "Clear Radar Blips",
-                        tint = TextPhosphorMuted
+                        contentDescription = "Clear Scan Map",
+                        tint = RadarRedDetection,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Clear Scan",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = TextPhosphorWhite
                     )
                 }
             }
 
-            // Live Animated Green Semicircular Radar on Black Background
+            // Live Area-Based Semicircular Radar on Black Background
             SemicircularRadarCanvas(
                 currentAngle = uiState.currentAngle,
                 measuredDistanceCm = uiState.measuredDistanceCm,
@@ -556,7 +573,47 @@ private fun RadarScopeSection(
                 onAngleSelected = onAngleChanged
             )
 
-            // Range Ring Scale Selector (50cm, 100cm, 200cm, 400cm)
+            // Map Legend + Range Ring Scale Selector (50cm, 100cm, 200cm, 400cm)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(RadarRedDetection)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "Object Wedge (${uiState.activeDetectedCount})",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextPhosphorWhite
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(RadarGreenBright.copy(alpha = 0.65f))
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "Cleared Sector (${uiState.clearedSectorCount})",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextPhosphorMuted
+                        )
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -565,7 +622,7 @@ private fun RadarScopeSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "RANGE SCALE:",
+                    text = "RADAR RANGE:",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextPhosphorMuted,
                     modifier = Modifier.padding(end = 8.dp)
@@ -609,13 +666,12 @@ private fun TelemetryCardsRow(uiState: RadarUiState) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Measured Distance Card (cm)
         val isDetected = uiState.isTargetDetected
         val distanceColor = if (isDetected) RadarRedDetection else RadarGreenBright
         val distanceDisplay = if (uiState.measuredDistanceCm != null && uiState.measuredDistanceCm > 0f) {
             "${formatDistanceValue(uiState.measuredDistanceCm)} cm"
         } else if (uiState.measuredDistanceCm != null && uiState.measuredDistanceCm == 0f) {
-            "OUT OF RANGE"
+            "NO ECHO"
         } else {
             "-- cm"
         }
@@ -663,17 +719,20 @@ private fun TelemetryCardsRow(uiState: RadarUiState) {
                     trackColor = RadarBlack
                 )
                 Text(
-                    text = if (isDetected) "Object within ${uiState.maxRangeCm} cm sector" else "HC-SR04 Ultrasonic Echo",
+                    text = if (isDetected) {
+                        "Red 15° wedge drawn at ${formatDistanceValue(uiState.measuredDistanceCm)} cm"
+                    } else {
+                        "Sector clear (turns green on rescan)"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = TextPhosphorMuted
                 )
             }
         }
 
-        // Current Radar Angle Card (0° - 180°)
         Surface(
             modifier = Modifier
-                .weight(0.85f)
+                .weight(0.9f)
                 .clip(RoundedCornerShape(16.dp))
                 .border(1.dp, RadarBorderGreen, RoundedCornerShape(16.dp)),
             color = RadarSurfaceDark
@@ -683,7 +742,7 @@ private fun TelemetryCardsRow(uiState: RadarUiState) {
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = stringResource(R.string.label_angle),
+                    text = "SENSOR ANGLE (0°–180°)",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextPhosphorMuted
                 )
@@ -702,13 +761,10 @@ private fun TelemetryCardsRow(uiState: RadarUiState) {
                     color = RadarGreenBright,
                     trackColor = RadarBlack
                 )
-                val sectorName = when {
-                    uiState.currentAngle < 60 -> "RIGHT SECTOR (0°–59°)"
-                    uiState.currentAngle <= 120 -> "FORWARD SECTOR (60°–120°)"
-                    else -> "LEFT SECTOR (121°–180°)"
-                }
+                val beamStart = (uiState.currentAngle - 7.5f).coerceAtLeast(0f)
+                val beamEnd = (uiState.currentAngle + 7.5f).coerceAtMost(180f)
                 Text(
-                    text = sectorName,
+                    text = String.format(Locale.US, "15° Beam: %.1f° – %.1f°", beamStart, beamEnd),
                     style = MaterialTheme.typography.labelSmall,
                     color = TextPhosphorMuted
                 )
@@ -724,18 +780,24 @@ private fun AngleAdjustmentPanel(
     onAngleChanged: (Int) -> Unit,
     onToggleAngleLock: (Boolean) -> Unit
 ) {
+    var angleTextInput by rememberSaveable { mutableStateOf(currentAngle.toString()) }
+
+    LaunchedEffect(currentAngle) {
+        angleTextInput = currentAngle.toString()
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .border(1.dp, RadarBorderGreen, RoundedCornerShape(16.dp)),
+            .border(1.5.dp, RadarGreenBright.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
         color = RadarSurfaceDark
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -744,15 +806,15 @@ private fun AngleAdjustmentPanel(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(R.string.label_manual_angle_control),
+                        text = "MANUAL HAND-SCAN ANGLE CONTROL (0° – 180°)",
                         style = MaterialTheme.typography.labelLarge,
                         color = RadarGreenBright
                     )
                     Text(
                         text = if (isManualLocked) {
-                            "Angle locked at ${currentAngle}° (ignores serial angle changes)"
+                            "Hand-Rotated Sensor Mode: Displayed angle stays synchronized with the angle you set below."
                         } else {
-                            "Follows Arduino serial stream + transmits slider angle over USB"
+                            "Serial Angle Mode: Uses the angle sent by the Arduino in 'angle,distance.' packets."
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = TextPhosphorMuted
@@ -764,30 +826,95 @@ private fun AngleAdjustmentPanel(
                     onClick = { onToggleAngleLock(!isManualLocked) },
                     label = {
                         Text(
-                            text = if (isManualLocked) "Locked" else "Auto Sweep",
+                            text = if (isManualLocked) "Manual Angle" else "Serial Angle",
                             style = MaterialTheme.typography.labelSmall
                         )
                     },
                     leadingIcon = {
                         Icon(
-                            imageVector = if (isManualLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                            imageVector = if (isManualLocked) Icons.Default.PanTool else Icons.Default.Sync,
                             contentDescription = null,
                             modifier = Modifier.size(15.dp)
                         )
                     },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = RadarAmberWarning.copy(alpha = 0.2f),
-                        selectedLabelColor = RadarAmberWarning,
-                        selectedLeadingIconColor = RadarAmberWarning,
+                        selectedContainerColor = RadarGreenBright.copy(alpha = 0.22f),
+                        selectedLabelColor = RadarGreenBright,
+                        selectedLeadingIconColor = RadarGreenBright,
                         containerColor = RadarSurfaceElevated,
-                        labelColor = RadarGreenBright,
-                        iconColor = RadarGreenBright
+                        labelColor = TextPhosphorWhite,
+                        iconColor = TextPhosphorWhite
                     ),
                     modifier = Modifier.testTag("toggle_angle_lock_button")
                 )
             }
 
-            // 0° to 180° Slider
+            // Large Direct Angle Entry + Stepper Row for Hand Scanning
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = angleTextInput,
+                    onValueChange = { newText ->
+                        angleTextInput = newText.filter { it.isDigit() }.take(3)
+                    },
+                    label = {
+                        Text(
+                            text = "Enter Sensor Angle (0–180°)",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            angleTextInput.toIntOrNull()?.let { parsed ->
+                                onAngleChanged(parsed.coerceIn(0, 180))
+                            }
+                        }
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = RadarGreenBright,
+                        unfocusedBorderColor = RadarBorderGreen,
+                        focusedLabelColor = RadarGreenBright,
+                        unfocusedLabelColor = TextPhosphorMuted,
+                        focusedTextColor = TextPhosphorWhite,
+                        unfocusedTextColor = TextPhosphorWhite
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("manual_angle_input")
+                )
+
+                Button(
+                    onClick = {
+                        val parsed = angleTextInput.toIntOrNull() ?: currentAngle
+                        onAngleChanged(parsed.coerceIn(0, 180))
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = RadarGreenBright,
+                        contentColor = Color.Black
+                    ),
+                    modifier = Modifier
+                        .height(54.dp)
+                        .testTag("apply_angle_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Set Angle",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Set ${angleTextInput.ifEmpty { "0" }}°", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // Large 0° to 180° Slider
             Slider(
                 value = currentAngle.toFloat(),
                 onValueChange = { newVal ->
@@ -798,14 +925,88 @@ private fun AngleAdjustmentPanel(
                 colors = SliderDefaults.colors(
                     thumbColor = RadarGreenBright,
                     activeTrackColor = RadarGreenBright,
-                    inactiveTrackColor = RadarGreenDim.copy(alpha = 0.4f)
+                    inactiveTrackColor = RadarGreenDim.copy(alpha = 0.45f)
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(48.dp)
                     .testTag("radar_angle_slider")
             )
 
-            // Quick Angle Presets & Fine Step Buttons
+            // Large Hand-Scan Step Buttons (-15° Beam Step, -5°, -1°, +1°, +5°, +15° Beam Step)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = { onAngleChanged((currentAngle - 15).coerceIn(0, 180)) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("angle_minus_15_button")
+                ) {
+                    Text("-15°", style = MaterialTheme.typography.labelLarge, color = RadarGreenBright)
+                }
+
+                OutlinedButton(
+                    onClick = { onAngleChanged((currentAngle - 5).coerceIn(0, 180)) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("angle_minus_5_button")
+                ) {
+                    Text("-5°", style = MaterialTheme.typography.labelLarge, color = TextPhosphorWhite)
+                }
+
+                OutlinedButton(
+                    onClick = { onAngleChanged((currentAngle - 1).coerceIn(0, 180)) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("angle_minus_1_button")
+                ) {
+                    Text("-1°", style = MaterialTheme.typography.labelLarge, color = TextPhosphorWhite)
+                }
+
+                OutlinedButton(
+                    onClick = { onAngleChanged((currentAngle + 1).coerceIn(0, 180)) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("angle_plus_1_button")
+                ) {
+                    Text("+1°", style = MaterialTheme.typography.labelLarge, color = TextPhosphorWhite)
+                }
+
+                OutlinedButton(
+                    onClick = { onAngleChanged((currentAngle + 5).coerceIn(0, 180)) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("angle_plus_5_button")
+                ) {
+                    Text("+5°", style = MaterialTheme.typography.labelLarge, color = TextPhosphorWhite)
+                }
+
+                OutlinedButton(
+                    onClick = { onAngleChanged((currentAngle + 15).coerceIn(0, 180)) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("angle_plus_15_button")
+                ) {
+                    Text("+15°", style = MaterialTheme.typography.labelLarge, color = RadarGreenBright)
+                }
+            }
+
+            // Quick Angle Presets (0° to 180° in 30° & 45° increments)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -813,23 +1014,7 @@ private fun AngleAdjustmentPanel(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedButton(
-                    onClick = { onAngleChanged((currentAngle - 5).coerceIn(0, 180)) },
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    modifier = Modifier.testTag("angle_minus_5_button")
-                ) {
-                    Text("-5°", style = MaterialTheme.typography.labelLarge, color = TextPhosphorWhite)
-                }
-
-                OutlinedButton(
-                    onClick = { onAngleChanged((currentAngle - 1).coerceIn(0, 180)) },
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    modifier = Modifier.testTag("angle_minus_1_button")
-                ) {
-                    Text("-1°", style = MaterialTheme.typography.labelLarge, color = TextPhosphorWhite)
-                }
-
-                listOf(0, 45, 90, 135, 180).forEach { presetDeg ->
+                listOf(0, 30, 45, 60, 90, 120, 135, 150, 180).forEach { presetDeg ->
                     val isSelected = currentAngle == presetDeg
                     FilterChip(
                         selected = isSelected,
@@ -848,22 +1033,6 @@ private fun AngleAdjustmentPanel(
                         ),
                         modifier = Modifier.testTag("angle_preset_$presetDeg")
                     )
-                }
-
-                OutlinedButton(
-                    onClick = { onAngleChanged((currentAngle + 1).coerceIn(0, 180)) },
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    modifier = Modifier.testTag("angle_plus_1_button")
-                ) {
-                    Text("+1°", style = MaterialTheme.typography.labelLarge, color = TextPhosphorWhite)
-                }
-
-                OutlinedButton(
-                    onClick = { onAngleChanged((currentAngle + 5).coerceIn(0, 180)) },
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    modifier = Modifier.testTag("angle_plus_5_button")
-                ) {
-                    Text("+5°", style = MaterialTheme.typography.labelLarge, color = TextPhosphorWhite)
                 }
             }
         }
@@ -910,7 +1079,6 @@ private fun SerialMonitorSection(
                 )
             }
 
-            // Packet parser verifier row (lets user test "90,24." or invalid strings anytime)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -963,14 +1131,13 @@ private fun SerialMonitorSection(
                 }
             }
 
-            // Quick test packet chips
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                listOf("90,24.", "45,18.", "135,42.", "180,75.", "bad_data").forEach { sample ->
+                listOf("90,24.", "90,0.", "45,35.", "135,52.", "bad_data").forEach { sample ->
                     FilterChip(
                         selected = false,
                         onClick = {
@@ -979,7 +1146,7 @@ private fun SerialMonitorSection(
                         },
                         label = {
                             Text(
-                                text = sample,
+                                text = if (sample == "90,0.") "90,0. (No Echo)" else sample,
                                 style = MaterialTheme.typography.labelSmall
                             )
                         },
@@ -991,7 +1158,6 @@ private fun SerialMonitorSection(
                 }
             }
 
-            // Live Serial Stream Console Box
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1017,7 +1183,7 @@ private fun SerialMonitorSection(
                                 text = "[${entry.timestampFormatted}] ${entry.rawText}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = if (entry.isValid) RadarGreenBright else RadarAmberWarning,
-                                modifier = Modifier.weight(0.48f),
+                                modifier = Modifier.weight(0.42f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -1025,7 +1191,7 @@ private fun SerialMonitorSection(
                                 text = entry.details,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = if (entry.isValid) TextPhosphorWhite else RadarRedDetection,
-                                modifier = Modifier.weight(0.52f),
+                                modifier = Modifier.weight(0.58f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )

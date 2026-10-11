@@ -32,12 +32,25 @@ sealed class UsbConnectionState {
 }
 
 /**
- * Represents a single echo/detection point on the semicircular radar (0° to 180°).
+ * Status of a scanned 15-degree radar beam sector.
+ */
+enum class SectorScanStatus {
+    /** Object detected within maxRangeCm; rendered as a red filled wedge around its location. */
+    DETECTED_RED,
+    /** Sector was rescanned and confirmed clear (no object detected); rendered as a green cleared sector. */
+    CLEARED_GREEN
+}
+
+/**
+ * Represents a persistent scan measurement for a 15-degree ultrasonic beam sector on the radar.
+ * Stored across manual sensor rotations until that angular sector is rescanned or cleared.
  */
 data class RadarEchoPoint(
     val angle: Int,
     val distanceCm: Float,
-    val timestampMs: Long
+    val timestampMs: Long,
+    val status: SectorScanStatus = if (distanceCm > 0f) SectorScanStatus.DETECTED_RED else SectorScanStatus.CLEARED_GREEN,
+    val beamWidthDeg: Float = 15f
 )
 
 /**
@@ -59,9 +72,17 @@ data class RadarUiState(
     val availableDevices: List<UsbDeviceInfo> = emptyList(),
     val currentAngle: Int = 90,
     val manualSliderAngle: Int = 90,
-    val isManualAngleLocked: Boolean = false,
+    /**
+     * True by default because the HC-SR04 sensor is rotated by hand without a servo/angle sensor.
+     * Keeps the displayed and mapped radar angle synchronized with the angle provided by the user.
+     */
+    val isManualAngleLocked: Boolean = true,
     val measuredDistanceCm: Float? = null,
     val maxRangeCm: Int = 100,
+    /**
+     * Persistent map of scanned sectors keyed by angle (0..180).
+     * Holds both DETECTED_RED object wedges and CLEARED_GREEN rescanned sectors.
+     */
     val echoPoints: Map<Int, RadarEchoPoint> = emptyMap(),
     val serialLogs: List<SerialLogEntry> = emptyList(),
     val validPacketsCount: Long = 0L,
@@ -74,4 +95,18 @@ data class RadarUiState(
 
     val isConnected: Boolean
         get() = connectionState is UsbConnectionState.Connected
+
+    val activeDetectedCount: Int
+        get() = echoPoints.values.count {
+            it.status == SectorScanStatus.DETECTED_RED &&
+                it.distanceCm > 0f &&
+                it.distanceCm <= maxRangeCm
+        }
+
+    val clearedSectorCount: Int
+        get() = echoPoints.values.count {
+            it.status == SectorScanStatus.CLEARED_GREEN ||
+                it.distanceCm <= 0f ||
+                it.distanceCm > maxRangeCm
+        }
 }

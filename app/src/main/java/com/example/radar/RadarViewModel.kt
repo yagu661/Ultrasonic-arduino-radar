@@ -7,6 +7,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.abs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,6 +15,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class RadarViewModel(application: Application) : AndroidViewModel(application) {
+
+    companion object {
+        /** HC-SR04 approximate ultrasonic beam cone is ~15 degrees (±7.5° around the center angle). */
+        const val BEAM_WIDTH_DEGREES = 15f
+        const val HALF_BEAM_OVERLAP_DEGREES = 7
+    }
 
     private val _uiState = MutableStateFlow(RadarUiState())
     val uiState: StateFlow<RadarUiState> = _uiState.asStateFlow()
@@ -90,26 +97,32 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Adjusts the radar angle from 0° to 180°.
-     * Immediately updates the radar sweep angle and sends the angle over USB Serial TX to Arduino.
+     * Sets the user's manual sensor angle from 0° to 180° as the user rotates the HC-SR04 by hand.
+     * Keeps the displayed angle synchronized with the angle provided by the user, and preserves
+     * all previously scanned areas on the radar map.
      */
     fun setRadarAngle(angle: Int) {
         val clamped = angle.coerceIn(0, 180)
         _uiState.update { state ->
-            // Look up if we already have a recent echo at this angle
-            val echoForAngle = state.echoPoints[clamped]
+            // Look up if there is an existing scan measurement within this angle's sector
+            val existingSector = state.echoPoints[clamped]
+                ?: state.echoPoints.values
+                    .filter { abs(it.angle - clamped) <= HALF_BEAM_OVERLAP_DEGREES }
+                    .minByOrNull { abs(it.angle - clamped) }
+
             state.copy(
                 currentAngle = clamped,
                 manualSliderAngle = clamped,
-                measuredDistanceCm = echoForAngle?.distanceCm ?: state.measuredDistanceCm
+                measuredDistanceCm = existingSector?.distanceCm
             )
         }
         usbRadarManager.sendAngleToArduino(clamped)
     }
 
     /**
-     * Toggles whether incoming serial angles automatically rotate the radar or if the
-     * radar angle stays locked to the user's manual 0°–180° slider setting.
+     * Toggles between:
+     * - Manual Hand-Scan Angle (locked = true, default): Uses the angle entered/set by the user (0°–180°).
+     * - Serial Angle Mode (locked = false): Uses the angle value inside incoming "angle,distance." serial lines.
      */
     fun setManualAngleLocked(locked: Boolean) {
         _uiState.update { state ->
@@ -121,7 +134,7 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Sets the maximum distance range (in cm) for the semicircular radar rings.
+     * Sets the maximum distance range (in cm) for the semicircular radar (e.g., 50, 100, 200, 400 cm).
      */
     fun setMaxRangeCm(rangeCm: Int) {
         val validRange = rangeCm.coerceIn(20, 500)
@@ -129,7 +142,7 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Clears stored echo dots and resets counters.
+     * Clears all stored scan measurements and resets the radar map.
      */
     fun clearRadarScope() {
         _uiState.update {
@@ -148,8 +161,8 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Allows testing the serial packet parser directly (e.g., "90,24." or invalid strings)
-     * and updates the radar accordingly.
+     * Processes a single line formatted as "angle,distance." (or manual test input)
+     * and updates the persistent area-based radar map.
      */
     fun processRawSerialInput(rawLine: String) {
         val result = SerialPacketParser.parsePacket(rawLine)
@@ -173,6 +186,8 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
                 when (res) {
                     is SerialParseResult.ValidPacket -> {
                         validCount++
+                        // When rotating the HC-SR04 by hand (isManualAngleLocked = true), keep the angle
+                        // synchronized with the user's manual angle control. If unlocked, use the serial packet angle.
                         val effectiveAngle = if (state.isManualAngleLocked) {
                             state.manualSliderAngle
                         } else {
@@ -184,22 +199,43 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         latestDistance = res.distanceCm
 
-                        if (res.distanceCm > 0f) {
-                            updatedEchos[effectiveAngle] = RadarEchoPoint(
-                                angle = effectiveAngle,
-                                distanceCm = res.distanceCm,
-                                timestampMs = nowMs
-                            )
+                        // Remove any stale scan entries whose center falls inside the newly rescanned 15° beam cone
+                        // (±7° around effectiveAngle) so rescanning an area updates it cleanly without erasing other angles.
+                        val overlappingKeys = updatedEchos.keys.filter { existingAngle ->
+                            abs(existingAngle - effectiveAngle) <= HALF_BEAM_OVERLAP_DEGREES
+                        }
+                        for (key in overlappingKeys) {
+                            updatedEchos.remove(key)
+                        }
+
+                        val isDetectedWithinRange = res.distanceCm > 0f && res.distanceCm <= state.maxRangeCm
+                        val sectorStatus = if (isDetectedWithinRange) {
+                            SectorScanStatus.DETECTED_RED
                         } else {
-                            // 0 cm from HC-SR04 indicates no echo / out of range at this angle
-                            updatedEchos.remove(effectiveAngle)
+                            SectorScanStatus.CLEARED_GREEN
+                        }
+
+                        updatedEchos[effectiveAngle] = RadarEchoPoint(
+                            angle = effectiveAngle,
+                            distanceCm = res.distanceCm,
+                            timestampMs = nowMs,
+                            status = sectorStatus,
+                            beamWidthDeg = BEAM_WIDTH_DEGREES
+                        )
+
+                        val logDetail = if (isDetectedWithinRange) {
+                            "Angle: ${effectiveAngle}° | Object @ ${formatCm(res.distanceCm)} cm (RED WEDGE)"
+                        } else if (res.distanceCm > state.maxRangeCm) {
+                            "Angle: ${effectiveAngle}° | ${formatCm(res.distanceCm)} cm > ${state.maxRangeCm} cm range (GREEN CLEAR)"
+                        } else {
+                            "Angle: ${effectiveAngle}° | No Echo / Clear Sector (GREEN CLEAR)"
                         }
 
                         newLogs.add(
                             createLogEntry(
                                 rawText = res.rawLine,
                                 isValid = true,
-                                details = "Angle: ${effectiveAngle}° | Dist: ${formatCm(res.distanceCm)} cm"
+                                details = logDetail
                             )
                         )
                     }
@@ -217,16 +253,8 @@ class RadarViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            // Prune echo points older than 18 seconds so stale targets fade away naturally
-            val cutoffMs = nowMs - 18_000L
-            val iterator = updatedEchos.entries.iterator()
-            while (iterator.hasNext()) {
-                val entry = iterator.next()
-                if (entry.value.timestampMs < cutoffMs && entry.key != currentAngle) {
-                    iterator.remove()
-                }
-            }
-
+            // NOTE: Previous detections outside the rescanned 15° area are intentionally preserved
+            // so the radar builds a persistent map as the user rotates the sensor by hand.
             state.copy(
                 currentAngle = currentAngle,
                 manualSliderAngle = manualAngle,

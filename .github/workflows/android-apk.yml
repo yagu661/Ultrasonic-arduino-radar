@@ -103,8 +103,8 @@ jobs:
               applicationId = "com.aistudio.ultrasonicradar.m30s"
               minSdk = 24
               targetSdk = 35
-              versionCode = 1
-              versionName = "1.0"
+              versionCode = 2
+              versionName = "2.0"
             }
 
             compileOptions {
@@ -155,7 +155,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f UltrasonicRadar.apk
-          git commit -m "Add compiled UltrasonicRadar.apk to repository root [skip ci]" || true
+          git commit -m "Update compiled UltrasonicRadar.apk (v2.0 Area Radar) [skip ci]" || true
+          git pull --rebase || true
           git push || true
 
       - name: Upload Installable APK Artifact
@@ -167,9 +168,9 @@ jobs:
       - name: Publish Direct APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: "Ultrasonic Radar v1.0 APK (Direct Download)"
-          body: "Tap **UltrasonicRadar.apk** below under Assets to download and install directly on your Samsung Galaxy M30s."
+          tag_name: v2.0.0
+          name: "Ultrasonic Radar v2.0 Area-Based Radar APK (Direct Download)"
+          body: "Tap **UltrasonicRadar.apk** below under Assets to download and install the upgraded v2.0 Area-Based Radar on your Samsung Galaxy M30s."
           files: UltrasonicRadar.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
