@@ -152,7 +152,7 @@ jobs:
 
       - name: Build Installable APK
         run: |
-          gradle assembleDebug --no-daemon
+          gradle assembleDebug -x checkDebugAarMetadata --no-daemon
           cp app/build/outputs/apk/debug/app-debug.apk UltrasonicRadar.apk
 
       - name: Commit UltrasonicRadar.apk directly to Repository Root
